@@ -1,0 +1,21 @@
+{
+  "name": "cms-api-node-typescript-flatfile",
+  "version": "0.1.0",
+  "description": "Standalone schema.org-aligned CMS API in TypeScript on Node.js — no runtime dependencies.",
+  "license": "MIT",
+  "author": "Eric Binek",
+  "type": "module",
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "start": "node src/server.ts",
+    "test": "node --test test/*.test.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "typescript": "5.9.2"
+  },
+  "private": true
+}
