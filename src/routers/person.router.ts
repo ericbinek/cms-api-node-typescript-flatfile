@@ -17,9 +17,22 @@ import {
   invalidIdError,
   methodNotAllowedError,
   preconditionFailedError,
+  forbiddenError,
 } from '../errors.ts';
+import {
+  can,
+  ownershipField,
+  statusProperty,
+  transitionAllowed,
+  readonlyViolations,
+  stripFields,
+  isVisible,
+  applyCreateDefaults,
+} from '../lib/access.ts';
+import type { Principal } from '../lib/auth.ts';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 
+const ENTITY = 'Person';
 const BASE = '/persons';
 const MAX_LIMIT = 100;
 const DEFAULT_LIMIT = 20;
@@ -104,31 +117,52 @@ export async function handleRoutes(
   res: ServerResponse,
   url: URL,
   requestPath: string,
+  principal: Principal,
 ): Promise<boolean> {
   const { pathname } = url;
   const method = req.method;
+  const role = principal.role;
 
   if (pathname === BASE) {
     if (method === 'GET') {
+      if (!can(role, ENTITY, 'read')) {
+        jsonError(req, res, forbiddenError(`Role "${role}" may not read ${ENTITY}.`, requestPath));
+        return true;
+      }
       const opts = parseListOptions(url);
       if (opts.errors.length) {
         jsonError(req, res, validationError(opts.errors, requestPath));
         return true;
       }
-      const result = await findAll(opts);
-      json(req, res, 200, result);
+      // Apply read visibility on the full filtered set, then paginate, so total
+      // counts only the records this principal may see. Internal fields stripped.
+      const all = await findAll({ filter: opts.filter, sort: opts.sort, order: opts.order, limit: Number.MAX_SAFE_INTEGER, offset: 0 });
+      const visible = all.items.filter((item) => isVisible(role, ENTITY, item as unknown as Record<string, unknown>));
+      const items = visible
+        .slice(opts.offset, opts.offset + opts.limit)
+        .map((item) => stripFields(role, item));
+      json(req, res, 200, { items, total: visible.length });
       return true;
     }
     if (method === 'POST') {
+      if (!can(role, ENTITY, 'create')) {
+        jsonError(req, res, forbiddenError(`Role "${role}" may not create ${ENTITY}.`, requestPath));
+        return true;
+      }
       const body = await parseBody(req);
+      const readonly = readonlyViolations(role, body);
+      if (readonly.length) {
+        jsonError(req, res, validationError([`Fields are not writable: ${readonly.join(', ')}.`], requestPath));
+        return true;
+      }
       const errors = validate(body);
       if (errors.length) {
         jsonError(req, res, validationError(errors, requestPath));
         return true;
       }
-      const created = await create(body);
+      const created = await create(applyCreateDefaults(ENTITY, body as Record<string, unknown>, principal.accountId));
       res.setHeader('Location', `${BASE}/${created.id}`);
-      json(req, res, 201, created);
+      json(req, res, 201, stripFields(role, created));
       return true;
     }
     jsonError(req, res, methodNotAllowedError(['GET', 'POST'], requestPath));
@@ -148,17 +182,32 @@ export async function handleRoutes(
     }
 
     if (method === 'GET') {
+      if (!can(role, ENTITY, 'read')) {
+        jsonError(req, res, forbiddenError(`Role "${role}" may not read ${ENTITY}.`, requestPath));
+        return true;
+      }
       const item = await findById(id);
-      if (!item) {
+      // A record the principal may not see is indistinguishable from a missing
+      // one (404, never 403) so its existence is not disclosed.
+      if (!item || !isVisible(role, ENTITY, item as unknown as Record<string, unknown>)) {
         jsonError(req, res, notFoundError(SCHEMA.TYPE_NAME, requestPath));
         return true;
       }
-      json(req, res, 200, await embedRefs(item));
+      json(req, res, 200, stripFields(role, await embedRefs(item)));
       return true;
     }
 
     if (method === 'PUT') {
+      if (!can(role, ENTITY, 'update')) {
+        jsonError(req, res, forbiddenError(`Role "${role}" may not update ${ENTITY}.`, requestPath));
+        return true;
+      }
       const body = await parseBody(req);
+      const readonly = readonlyViolations(role, body);
+      if (readonly.length) {
+        jsonError(req, res, validationError([`Fields are not writable: ${readonly.join(', ')}.`], requestPath));
+        return true;
+      }
       const errors = validate(body, { partial: true });
       if (errors.length) {
         jsonError(req, res, validationError(errors, requestPath));
@@ -169,20 +218,44 @@ export async function handleRoutes(
         jsonError(req, res, notFoundError(SCHEMA.TYPE_NAME, requestPath));
         return true;
       }
+      const record = current as unknown as Record<string, unknown>;
+      const writeBody = body as Record<string, unknown>;
+      const ownerField = ownershipField(role, 'update');
+      if (ownerField && record[ownerField] !== principal.accountId) {
+        jsonError(req, res, forbiddenError('You may only modify your own records.', requestPath));
+        return true;
+      }
       const ifMatch = req.headers['if-match'];
       if (ifMatch && ifMatch !== '*' && ifMatch !== etagOf(current)) {
         jsonError(req, res, preconditionFailedError(requestPath));
         return true;
       }
+      const status = statusProperty(ENTITY);
+      if (status && writeBody[status] !== undefined && writeBody[status] !== record[status]) {
+        if (!transitionAllowed(ENTITY, record[status], writeBody[status], role)) {
+          jsonError(req, res, forbiddenError(`Status transition ${record[status]} -> ${writeBody[status]} is not allowed for role "${role}".`, requestPath));
+          return true;
+        }
+      }
       const updated = await update(id, body);
-      json(req, res, 200, updated);
+      json(req, res, 200, stripFields(role, updated));
       return true;
     }
 
     if (method === 'DELETE') {
+      if (!can(role, ENTITY, 'delete')) {
+        jsonError(req, res, forbiddenError(`Role "${role}" may not delete ${ENTITY}.`, requestPath));
+        return true;
+      }
       const current = await findById(id);
       if (!current) {
         jsonError(req, res, notFoundError(SCHEMA.TYPE_NAME, requestPath));
+        return true;
+      }
+      const record = current as unknown as Record<string, unknown>;
+      const ownerField = ownershipField(role, 'delete');
+      if (ownerField && record[ownerField] !== principal.accountId) {
+        jsonError(req, res, forbiddenError('You may only delete your own records.', requestPath));
         return true;
       }
       const ifMatch = req.headers['if-match'];
