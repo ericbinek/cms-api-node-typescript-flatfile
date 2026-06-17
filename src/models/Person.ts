@@ -26,6 +26,7 @@ export interface Person {
   url?: string;
   description?: string;
   image?: string;
+  worksFor?: string;
   jobTitle?: string;
   sameAs?: string[];
 }
@@ -42,6 +43,7 @@ const FIELDS: Record<string, FieldSpec> = {
   "url": { kind: 'scalar', type: "URL", cardinality: "one" },
   "description": { kind: 'scalar', type: "Text", cardinality: "one" },
   "image": { kind: 'ref', targets: ["ImageObject"], cardinality: "one" },
+  "worksFor": { kind: 'ref', targets: ["Organization"], cardinality: "one" },
   "jobTitle": { kind: 'scalar', type: "Text", cardinality: "one" },
   "sameAs": { kind: 'scalar', type: "URL", cardinality: "many" },
 };
@@ -52,7 +54,7 @@ const SORTABLE_FIELDS: Set<string> = new Set(["dateCreated", "dateModified", ...
 
 const SYSTEM_FIELDS: Set<string> = new Set(['id', 'dateCreated', 'dateModified', '@context', '@type']);
 
-const REF_COLLECTIONS: Record<string, string> = {"ImageObject":"image-objects.json"};
+const REF_COLLECTIONS: Record<string, string> = {"ImageObject":"image-objects.json","Organization":"organizations.json"};
 
 function isEmpty(value: unknown): boolean {
   if (value === undefined || value === null) return true;

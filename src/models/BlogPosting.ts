@@ -23,7 +23,10 @@ export interface BlogPosting {
   description?: string;
   articleBody: string;
   author: string;
+  publisher?: string;
   image?: string[];
+  video?: string[];
+  audio?: string[];
   keywords?: string[];
   about?: string[];
   datePublished?: string;
@@ -43,7 +46,10 @@ const FIELDS: Record<string, FieldSpec> = {
   "description": { kind: 'scalar', type: "Text", cardinality: "one" },
   "articleBody": { kind: 'scalar', type: "Text", cardinality: "one" },
   "author": { kind: 'ref', targets: ["Person"], cardinality: "one" },
+  "publisher": { kind: 'ref', targets: ["Organization"], cardinality: "one" },
   "image": { kind: 'ref', targets: ["ImageObject"], cardinality: "many" },
+  "video": { kind: 'ref', targets: ["VideoObject"], cardinality: "many" },
+  "audio": { kind: 'ref', targets: ["AudioObject"], cardinality: "many" },
   "keywords": { kind: 'ref', targets: ["DefinedTerm"], cardinality: "many" },
   "about": { kind: 'ref', targets: ["CategoryCode"], cardinality: "many" },
   "datePublished": { kind: 'scalar', type: "DateTime", cardinality: "one" },
@@ -62,7 +68,7 @@ const SORTABLE_FIELDS: Set<string> = new Set(["dateCreated", "dateModified", ...
 
 const SYSTEM_FIELDS: Set<string> = new Set(['id', 'dateCreated', 'dateModified', '@context', '@type']);
 
-const REF_COLLECTIONS: Record<string, string> = {"Person":"persons.json","ImageObject":"image-objects.json","DefinedTerm":"defined-terms.json","CategoryCode":"category-codes.json"};
+const REF_COLLECTIONS: Record<string, string> = {"Person":"persons.json","Organization":"organizations.json","ImageObject":"image-objects.json","VideoObject":"video-objects.json","AudioObject":"audio-objects.json","DefinedTerm":"defined-terms.json","CategoryCode":"category-codes.json"};
 
 function isEmpty(value: unknown): boolean {
   if (value === undefined || value === null) return true;

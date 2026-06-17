@@ -8,6 +8,7 @@ export type ScalarType =
   | 'Date'
   | 'DateTime'
   | 'Time'
+  | 'Duration'
   | 'URL';
 
 export type FieldSpec =

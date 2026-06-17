@@ -14,14 +14,18 @@ import { seedAdmin } from './models/account.ts';
 import { handleAuthRoutes } from './routers/auth.router.ts';
 import { handleRoutes as handleBlogPosting } from './routers/blog-posting.router.ts';
 import { handleRoutes as handlePerson } from './routers/person.router.ts';
+import { handleRoutes as handleOrganization } from './routers/organization.router.ts';
 import { handleRoutes as handleWebPage } from './routers/web-page.router.ts';
 import { handleRoutes as handleImageObject } from './routers/image-object.router.ts';
+import { handleRoutes as handleVideoObject } from './routers/video-object.router.ts';
+import { handleRoutes as handleAudioObject } from './routers/audio-object.router.ts';
 import { handleRoutes as handleCategoryCode } from './routers/category-code.router.ts';
 import { handleRoutes as handleCategoryCodeSet } from './routers/category-code-set.router.ts';
 import { handleRoutes as handleDefinedTerm } from './routers/defined-term.router.ts';
 import { handleRoutes as handleDefinedTermSet } from './routers/defined-term-set.router.ts';
 import { handleRoutes as handleComment } from './routers/comment.router.ts';
 import { handleRoutes as handleWebSite } from './routers/web-site.router.ts';
+import { handleRoutes as handleSiteNavigationElement } from './routers/site-navigation-element.router.ts';
 
 const PORT = parseInt(process.env.PORT || '3008', 10);
 const HOST = process.env.HOST || '0.0.0.0';
@@ -75,12 +79,24 @@ async function handleRequest(req: IncomingMessage, res: ServerResponse): Promise
       const handled = await handlePerson(req, res, url, requestPath, principal);
       if (handled) return;
     }
+    if (pathname === '/organizations' || pathname.startsWith('/organizations/')) {
+      const handled = await handleOrganization(req, res, url, requestPath, principal);
+      if (handled) return;
+    }
     if (pathname === '/web-pages' || pathname.startsWith('/web-pages/')) {
       const handled = await handleWebPage(req, res, url, requestPath, principal);
       if (handled) return;
     }
     if (pathname === '/image-objects' || pathname.startsWith('/image-objects/')) {
       const handled = await handleImageObject(req, res, url, requestPath, principal);
+      if (handled) return;
+    }
+    if (pathname === '/video-objects' || pathname.startsWith('/video-objects/')) {
+      const handled = await handleVideoObject(req, res, url, requestPath, principal);
+      if (handled) return;
+    }
+    if (pathname === '/audio-objects' || pathname.startsWith('/audio-objects/')) {
+      const handled = await handleAudioObject(req, res, url, requestPath, principal);
       if (handled) return;
     }
     if (pathname === '/category-codes' || pathname.startsWith('/category-codes/')) {
@@ -105,6 +121,10 @@ async function handleRequest(req: IncomingMessage, res: ServerResponse): Promise
     }
     if (pathname === '/web-sites' || pathname.startsWith('/web-sites/')) {
       const handled = await handleWebSite(req, res, url, requestPath, principal);
+      if (handled) return;
+    }
+    if (pathname === '/site-navigation-elements' || pathname.startsWith('/site-navigation-elements/')) {
+      const handled = await handleSiteNavigationElement(req, res, url, requestPath, principal);
       if (handled) return;
     }
 

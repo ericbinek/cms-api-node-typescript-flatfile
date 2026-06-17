@@ -23,6 +23,7 @@ export interface WebSite {
   url: string;
   inLanguage?: LanguageValue;
   image?: string;
+  publisher?: string;
 }
 
 const COLLECTION_FILE = "web-sites.json";
@@ -34,6 +35,7 @@ const FIELDS: Record<string, FieldSpec> = {
   "url": { kind: 'scalar', type: "URL", cardinality: "one" },
   "inLanguage": { kind: 'embed', type: "Language", cardinality: "one" },
   "image": { kind: 'ref', targets: ["ImageObject"], cardinality: "one" },
+  "publisher": { kind: 'ref', targets: ["Organization"], cardinality: "one" },
 };
 const FIELD_NAMES: Set<string> = new Set(Object.keys(FIELDS));
 const REQUIRED_FIELDS: Set<string> = new Set(["name","url"]);
@@ -42,7 +44,7 @@ const SORTABLE_FIELDS: Set<string> = new Set(["dateCreated", "dateModified", ...
 
 const SYSTEM_FIELDS: Set<string> = new Set(['id', 'dateCreated', 'dateModified', '@context', '@type']);
 
-const REF_COLLECTIONS: Record<string, string> = {"ImageObject":"image-objects.json"};
+const REF_COLLECTIONS: Record<string, string> = {"ImageObject":"image-objects.json","Organization":"organizations.json"};
 
 function isEmpty(value: unknown): boolean {
   if (value === undefined || value === null) return true;

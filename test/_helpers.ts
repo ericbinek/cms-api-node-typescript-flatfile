@@ -1,4 +1,5 @@
 import { spawn } from 'node:child_process';
+import { createServer, type AddressInfo } from 'node:net';
 import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
@@ -8,14 +9,18 @@ import type { FieldSpec } from '../src/types.ts';
 
 import * as BlogPosting from '../src/models/BlogPosting.ts';
 import * as Person from '../src/models/Person.ts';
+import * as Organization from '../src/models/Organization.ts';
 import * as WebPage from '../src/models/WebPage.ts';
 import * as ImageObject from '../src/models/ImageObject.ts';
+import * as VideoObject from '../src/models/VideoObject.ts';
+import * as AudioObject from '../src/models/AudioObject.ts';
 import * as CategoryCode from '../src/models/CategoryCode.ts';
 import * as CategoryCodeSet from '../src/models/CategoryCodeSet.ts';
 import * as DefinedTerm from '../src/models/DefinedTerm.ts';
 import * as DefinedTermSet from '../src/models/DefinedTermSet.ts';
 import * as Comment from '../src/models/Comment.ts';
 import * as WebSite from '../src/models/WebSite.ts';
+import * as SiteNavigationElement from '../src/models/SiteNavigationElement.ts';
 import { hashPassword } from '../src/models/account.ts';
 import { READONLY_FIELDS } from '../src/lib/access.ts';
 
@@ -33,14 +38,18 @@ interface ModelModule {
 const MODELS: Record<string, ModelModule> = {
   BlogPosting,
   Person,
+  Organization,
   WebPage,
   ImageObject,
+  VideoObject,
+  AudioObject,
   CategoryCode,
   CategoryCodeSet,
   DefinedTerm,
   DefinedTermSet,
   Comment,
   WebSite,
+  SiteNavigationElement,
 };
 
 interface AccountSpec {
@@ -74,7 +83,18 @@ function pluralKebab(name: string): string {
   return name.replace(/([A-Z])/g, '-$1').replace(/^-/, '').toLowerCase() + 's';
 }
 
-let portCounter = 14000 + Math.floor(Math.random() * 1000);
+// Ask the OS for a free port instead of guessing one. Test files run in
+// parallel; a guessed port from a fixed range collides under load (EADDRINUSE).
+function freePort(): Promise<number> {
+  return new Promise((res, rej) => {
+    const probe = createServer();
+    probe.once('error', rej);
+    probe.listen(0, '127.0.0.1', () => {
+      const { port } = probe.address() as AddressInfo;
+      probe.close(() => res(port));
+    });
+  });
+}
 
 // Auth is mandatory on writes. The entity suite drives the API as an admin (who
 // sees and may do everything), so the CRUD contract is exercised unchanged. The
@@ -115,7 +135,7 @@ export async function login(baseUrl: string, username: string, password: string)
 // Pass { accounts: [...] } to seed a specific set, or { env: { ADMIN_USER, ... } }
 // to exercise the env bootstrap (no store written).
 export async function startServer({ accounts, env }: StartOptions = {}): Promise<ServerHandle> {
-  const port = portCounter++;
+  const port = await freePort();
   const dataDir = await mkdtemp(join(tmpdir(), 'cms-test-'));
 
   let seed = accounts;

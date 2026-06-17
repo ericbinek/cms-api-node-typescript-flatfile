@@ -10,53 +10,49 @@ import {
   etagFor,
 } from '../lib/validation.ts';
 import { withLock, readCollection, writeCollection } from '../lib/storage.ts';
-import type { FieldSpec, ListResult, LanguageValue } from '../types.ts';
+import type { FieldSpec, ListResult } from '../types.ts';
 
-export interface WebPage {
+export interface AudioObject {
   '@context': 'https://schema.org';
-  '@type': 'WebPage';
+  '@type': 'AudioObject';
   id: string;
   dateCreated: string;
   dateModified: string;
-  headline: string;
+  name?: string;
   description?: string;
-  text?: string;
-  author?: string;
-  publisher?: string;
-  primaryImageOfPage?: string;
-  isPartOf?: string;
-  datePublished?: string;
-  url?: string;
-  inLanguage?: LanguageValue;
-  creativeWorkStatus?: "Draft" | "Pending" | "Published" | "Archived";
+  contentUrl: string;
+  encodingFormat?: string;
+  duration?: string;
+  transcript?: string;
+  uploadDate?: string;
+  creator?: string;
+  thumbnail?: string;
+  productionCompany?: string;
 }
 
-const COLLECTION_FILE = "web-pages.json";
-const TYPE_NAME = 'WebPage';
+const COLLECTION_FILE = "audio-objects.json";
+const TYPE_NAME = 'AudioObject';
 
 const FIELDS: Record<string, FieldSpec> = {
-  "headline": { kind: 'scalar', type: "Text", cardinality: "one" },
+  "name": { kind: 'scalar', type: "Text", cardinality: "one" },
   "description": { kind: 'scalar', type: "Text", cardinality: "one" },
-  "text": { kind: 'scalar', type: "Text", cardinality: "one" },
-  "author": { kind: 'ref', targets: ["Person"], cardinality: "one" },
-  "publisher": { kind: 'ref', targets: ["Organization"], cardinality: "one" },
-  "primaryImageOfPage": { kind: 'ref', targets: ["ImageObject"], cardinality: "one" },
-  "isPartOf": { kind: 'ref', targets: ["WebSite"], cardinality: "one" },
-  "datePublished": { kind: 'scalar', type: "DateTime", cardinality: "one" },
-  "dateModified": { kind: 'scalar', type: "DateTime", cardinality: "one" },
-  "dateCreated": { kind: 'scalar', type: "DateTime", cardinality: "one" },
-  "url": { kind: 'scalar', type: "URL", cardinality: "one" },
-  "inLanguage": { kind: 'embed', type: "Language", cardinality: "one" },
-  "creativeWorkStatus": { kind: 'enum', values: ["Draft","Pending","Published","Archived"], cardinality: "one" },
+  "contentUrl": { kind: 'scalar', type: "URL", cardinality: "one" },
+  "encodingFormat": { kind: 'scalar', type: "Text", cardinality: "one" },
+  "duration": { kind: 'scalar', type: "Duration", cardinality: "one" },
+  "transcript": { kind: 'scalar', type: "Text", cardinality: "one" },
+  "uploadDate": { kind: 'scalar', type: "DateTime", cardinality: "one" },
+  "creator": { kind: 'ref', targets: ["Person"], cardinality: "one" },
+  "thumbnail": { kind: 'ref', targets: ["ImageObject"], cardinality: "one" },
+  "productionCompany": { kind: 'ref', targets: ["Organization"], cardinality: "one" },
 };
 const FIELD_NAMES: Set<string> = new Set(Object.keys(FIELDS));
-const REQUIRED_FIELDS: Set<string> = new Set(["headline"]);
-const SEARCHABLE_FIELDS: Set<string> = new Set(["headline","description","text"]);
-const SORTABLE_FIELDS: Set<string> = new Set(["dateCreated", "dateModified", ...["headline","description","text","datePublished","dateModified","dateCreated","url","creativeWorkStatus"]]);
+const REQUIRED_FIELDS: Set<string> = new Set(["contentUrl"]);
+const SEARCHABLE_FIELDS: Set<string> = new Set(["name","description","encodingFormat","transcript"]);
+const SORTABLE_FIELDS: Set<string> = new Set(["dateCreated", "dateModified", ...["name","description","contentUrl","encodingFormat","duration","transcript","uploadDate"]]);
 
 const SYSTEM_FIELDS: Set<string> = new Set(['id', 'dateCreated', 'dateModified', '@context', '@type']);
 
-const REF_COLLECTIONS: Record<string, string> = {"Person":"persons.json","Organization":"organizations.json","ImageObject":"image-objects.json","WebSite":"web-sites.json"};
+const REF_COLLECTIONS: Record<string, string> = {"Person":"persons.json","ImageObject":"image-objects.json","Organization":"organizations.json"};
 
 function isEmpty(value: unknown): boolean {
   if (value === undefined || value === null) return true;
@@ -185,7 +181,7 @@ export interface FindAllOptions {
   offset?: number;
 }
 
-export async function findAll(options: FindAllOptions = {}): Promise<ListResult<WebPage>> {
+export async function findAll(options: FindAllOptions = {}): Promise<ListResult<AudioObject>> {
   const { filter = {}, sort = 'dateCreated', order = 'desc', limit = 20, offset = 0 } = options;
   let results = await readCollection(COLLECTION_FILE);
 
@@ -201,13 +197,13 @@ export async function findAll(options: FindAllOptions = {}): Promise<ListResult<
   results.sort((a, b) => compareForSort(a[sortField], b[sortField], direction));
 
   const total = results.length;
-  const items = results.slice(offset, offset + limit) as unknown as WebPage[];
+  const items = results.slice(offset, offset + limit) as unknown as AudioObject[];
   return { items, total };
 }
 
-export async function findById(id: string): Promise<WebPage | null> {
+export async function findById(id: string): Promise<AudioObject | null> {
   if (!isValidUUID(id)) return null;
-  const items = await readCollection<WebPage>(COLLECTION_FILE);
+  const items = await readCollection<AudioObject>(COLLECTION_FILE);
   const normalized = normalizeUUID(id);
   return items.find((item) => item.id === normalized) || null;
 }
@@ -216,7 +212,7 @@ export async function findById(id: string): Promise<WebPage | null> {
 // style): each ref UUID is replaced by the referenced object. List responses
 // stay flat. Embedded objects keep their own refs as UUIDs; a ref that no
 // longer resolves is left as the stored UUID string.
-export async function embedRefs(item: WebPage): Promise<Record<string, unknown>> {
+export async function embedRefs(item: AudioObject): Promise<Record<string, unknown>> {
   const cache = new Map<string, Record<string, unknown>[]>();
   const load = async (file: string): Promise<Record<string, unknown>[]> => {
     if (!cache.has(file)) cache.set(file, await readCollection(file));
@@ -245,10 +241,10 @@ export async function embedRefs(item: WebPage): Promise<Record<string, unknown>>
   return out;
 }
 
-export function create(rawData: unknown): Promise<WebPage> {
+export function create(rawData: unknown): Promise<AudioObject> {
   return withLock(async () => {
     const data = normalizeRefs(deepSanitize(rawData) as Record<string, unknown>);
-    const items = await readCollection<WebPage>(COLLECTION_FILE);
+    const items = await readCollection<AudioObject>(COLLECTION_FILE);
     const now = new Date().toISOString();
     const item = {
       ...data,
@@ -257,16 +253,16 @@ export function create(rawData: unknown): Promise<WebPage> {
       id: randomUUID(),
       dateCreated: now,
       dateModified: now,
-    } as unknown as WebPage;
+    } as unknown as AudioObject;
     items.push(item);
     await writeCollection(COLLECTION_FILE, items);
     return item;
   });
 }
 
-export function update(id: string, rawData: unknown): Promise<WebPage | null> {
+export function update(id: string, rawData: unknown): Promise<AudioObject | null> {
   return withLock(async () => {
-    const items = await readCollection<WebPage>(COLLECTION_FILE);
+    const items = await readCollection<AudioObject>(COLLECTION_FILE);
     const normalized = normalizeUUID(id);
     const index = items.findIndex((item) => item.id === normalized);
     if (index === -1) return null;
@@ -281,7 +277,7 @@ export function update(id: string, rawData: unknown): Promise<WebPage | null> {
       id: current.id,
       dateCreated: current.dateCreated,
       dateModified: new Date().toISOString(),
-    } as unknown as WebPage;
+    } as unknown as AudioObject;
     items[index] = updated;
     await writeCollection(COLLECTION_FILE, items);
     return updated;
@@ -290,7 +286,7 @@ export function update(id: string, rawData: unknown): Promise<WebPage | null> {
 
 export function remove(id: string): Promise<boolean> {
   return withLock(async () => {
-    const items = await readCollection<WebPage>(COLLECTION_FILE);
+    const items = await readCollection<AudioObject>(COLLECTION_FILE);
     const normalized = normalizeUUID(id);
     const filtered = items.filter((item) => item.id !== normalized);
     if (filtered.length === items.length) return false;
@@ -299,7 +295,7 @@ export function remove(id: string): Promise<boolean> {
   });
 }
 
-export function etagOf(item: WebPage): string {
+export function etagOf(item: AudioObject): string {
   return etagFor(item);
 }
 
