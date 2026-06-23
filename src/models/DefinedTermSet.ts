@@ -6,6 +6,7 @@ import {
   normalizeUUID,
   checkScalar,
   isEmbed,
+  sanitizeString,
   deepSanitize,
   etagFor,
 } from '../lib/validation.ts';
@@ -27,9 +28,9 @@ const COLLECTION_FILE = "defined-term-sets.json";
 const TYPE_NAME = 'DefinedTermSet';
 
 const FIELDS: Record<string, FieldSpec> = {
-  "name": { kind: 'scalar', type: "Text", cardinality: "one" },
-  "description": { kind: 'scalar', type: "Text", cardinality: "one" },
-  "url": { kind: 'scalar', type: "URL", cardinality: "one" },
+  "name": { kind: 'scalar', type: "Text", cardinality: "one", maxLength: 256 },
+  "description": { kind: 'scalar', type: "Text", cardinality: "one", maxLength: 5000, multiline: true },
+  "url": { kind: 'scalar', type: "URL", cardinality: "one", maxLength: 2048 },
 };
 const FIELD_NAMES: Set<string> = new Set(Object.keys(FIELDS));
 const REQUIRED_FIELDS: Set<string> = new Set(["name"]);
@@ -52,6 +53,8 @@ function checkOne(spec: FieldSpec, value: unknown, path: string): string[] {
   if (spec.kind === 'scalar') {
     if (!checkScalar(spec.type, value)) {
       errors.push(`Field "${path}" must be a ${spec.type}.`);
+    } else if (spec.maxLength !== undefined && typeof value === 'string' && value.length > spec.maxLength) {
+      errors.push(`Field "${path}" must be at most ${spec.maxLength} characters.`);
     }
   } else if (spec.kind === 'enum') {
     if (!spec.values.includes(value as string)) {
@@ -121,6 +124,28 @@ export function validate(data: unknown, { partial = false }: { partial?: boolean
   }
 
   return errors;
+}
+
+// Field-aware input cleaning, run before validation and storage: each known
+// scalar string is normalized, stripped of control characters and trimmed,
+// with long-form (multiline) fields keeping their internal line breaks. Refs,
+// embeds, arrays and other values fall back to the conservative property-blind
+// sanitizer. The body is cleaned in place: every key is left where it is —
+// dangerous keys (__proto__, …) are deliberately untouched so validate() can
+// reject the body, rather than silently dropped here.
+export function sanitize(data: unknown): unknown {
+  if (!isObject(data)) return data;
+  for (const key of Object.keys(data)) {
+    if (isDangerousKey(key)) continue;
+    const value = data[key];
+    const spec = FIELDS[key];
+    if (spec && spec.kind === 'scalar' && typeof value === 'string') {
+      data[key] = sanitizeString(value, { multiline: spec.multiline === true });
+    } else {
+      data[key] = deepSanitize(value);
+    }
+  }
+  return data;
 }
 
 function normalizeRefs(data: Record<string, unknown>): Record<string, unknown> {
@@ -229,7 +254,7 @@ export async function embedRefs(item: DefinedTermSet): Promise<Record<string, un
 
 export function create(rawData: unknown): Promise<DefinedTermSet> {
   return withLock(async () => {
-    const data = normalizeRefs(deepSanitize(rawData) as Record<string, unknown>);
+    const data = normalizeRefs(rawData as Record<string, unknown>);
     const items = await readCollection<DefinedTermSet>(COLLECTION_FILE);
     const now = new Date().toISOString();
     const item = {
@@ -253,7 +278,7 @@ export function update(id: string, rawData: unknown): Promise<DefinedTermSet | n
     const index = items.findIndex((item) => item.id === normalized);
     if (index === -1) return null;
 
-    const data = normalizeRefs(deepSanitize(rawData) as Record<string, unknown>);
+    const data = normalizeRefs(rawData as Record<string, unknown>);
     const current = items[index];
     const updated = {
       ...current,

@@ -5,6 +5,7 @@ import {
   create,
   update,
   remove,
+  sanitize,
   validate,
   etagOf,
   SCHEMA,
@@ -149,7 +150,7 @@ export async function handleRoutes(
         jsonError(req, res, forbiddenError(`Role "${role}" may not create ${ENTITY}.`, requestPath));
         return true;
       }
-      const body = await parseBody(req);
+      const body = sanitize(await parseBody(req));
       const readonly = readonlyViolations(role, body);
       if (readonly.length) {
         jsonError(req, res, validationError([`Fields are not writable: ${readonly.join(', ')}.`], requestPath));
@@ -202,7 +203,7 @@ export async function handleRoutes(
         jsonError(req, res, forbiddenError(`Role "${role}" may not update ${ENTITY}.`, requestPath));
         return true;
       }
-      const body = await parseBody(req);
+      const body = sanitize(await parseBody(req));
       const readonly = readonlyViolations(role, body);
       if (readonly.length) {
         jsonError(req, res, validationError([`Fields are not writable: ${readonly.join(', ')}.`], requestPath));

@@ -12,7 +12,7 @@ export type ScalarType =
   | 'URL';
 
 export type FieldSpec =
-  | { kind: 'scalar'; type: ScalarType; cardinality: Cardinality }
+  | { kind: 'scalar'; type: ScalarType; cardinality: Cardinality; maxLength?: number; multiline?: boolean }
   | { kind: 'enum'; values: readonly string[]; cardinality: Cardinality }
   | { kind: 'ref'; targets: readonly string[]; cardinality: Cardinality }
   | { kind: 'embed'; type: string; cardinality: Cardinality };

@@ -167,6 +167,45 @@ test(`${ENTITY}: deeply nested JSON body rejected with 400 INVALID_JSON`, async 
   assert.equal((await jsonOf(r)).error, 'INVALID_JSON');
 });
 
+test(`${ENTITY}: leading/trailing whitespace is trimmed on create`, async () => {
+  const payload = await buildPayload(server.baseUrl, ENTITY);
+  payload["text"] = '  trimmed value  ';
+  const r = await postEntity(server.baseUrl, ENTITY, payload);
+  assert.equal(r.status, 201, `expected 201, got ${r.status}`);
+  assert.equal((await jsonOf(r))["text"], 'trimmed value');
+});
+
+test(`${ENTITY}: control characters are stripped on create`, async () => {
+  const payload = await buildPayload(server.baseUrl, ENTITY);
+  payload["text"] = 'clean\u0000\u0007ed';
+  const r = await postEntity(server.baseUrl, ENTITY, payload);
+  assert.equal(r.status, 201, `expected 201, got ${r.status}`);
+  assert.equal((await jsonOf(r))["text"], 'cleaned');
+});
+
+test(`${ENTITY}: value over maxLength rejected with 400 VALIDATION_ERROR`, async () => {
+  const payload = await buildPayload(server.baseUrl, ENTITY);
+  payload["text"] = 'a'.repeat(10001);
+  const r = await postEntity(server.baseUrl, ENTITY, payload);
+  assert.equal(r.status, 400);
+  assert.equal((await jsonOf(r)).error, 'VALIDATION_ERROR');
+});
+
+test(`${ENTITY}: value at maxLength accepted`, async () => {
+  const payload = await buildPayload(server.baseUrl, ENTITY);
+  payload["text"] = 'a'.repeat(10000);
+  const r = await postEntity(server.baseUrl, ENTITY, payload);
+  assert.equal(r.status, 201, `expected 201, got ${r.status}`);
+});
+
+test(`${ENTITY}: multiline field "text" keeps internal newlines`, async () => {
+  const payload = await buildPayload(server.baseUrl, ENTITY);
+  payload["text"] = 'first line\nsecond line';
+  const r = await postEntity(server.baseUrl, ENTITY, payload);
+  assert.equal(r.status, 201, `expected 201, got ${r.status}`);
+  assert.equal((await jsonOf(r))["text"], 'first line\nsecond line');
+});
+
 test(`${ENTITY}: GET by id embeds "author" as an object; list stays flat`, async () => {
   const payload = await buildPayload(server.baseUrl, ENTITY, { partial: true });
   const created = await jsonOf(await postEntity(server.baseUrl, ENTITY, payload));

@@ -9,6 +9,14 @@ const DANGEROUS_KEYS = new Set(['__proto__', 'constructor', 'prototype']);
 
 export const MAX_STRING_LENGTH = 100000;
 
+// Control characters that get stripped from every string. The multiline variant
+// keeps the regular whitespace Tab (U+0009), Newline (U+000A) and Carriage
+// Return (U+000D) so long-form text can hold line breaks; the default variant
+// removes those too, since a single-line field should never carry them. Null
+// bytes (U+0000) and the C1 block fall in both ranges and are always removed.
+const CONTROL_CHARS_KEEP_WS = /[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F-\u009F]/g;
+const CONTROL_CHARS_ALL = /[\u0000-\u001F\u007F-\u009F]/g;
+
 export function isObject(v: unknown): v is Record<string, unknown> {
   return v !== null && typeof v === 'object' && !Array.isArray(v);
 }
@@ -17,9 +25,14 @@ export function isDangerousKey(k: string): boolean {
   return DANGEROUS_KEYS.has(k);
 }
 
-export function sanitizeString(value: unknown): unknown {
+// Normalize, strip control characters, then trim. Multiline fields keep their
+// internal line breaks but still lose leading/trailing whitespace.
+export function sanitizeString(value: unknown, { multiline = false }: { multiline?: boolean } = {}): unknown {
   if (typeof value !== 'string') return value;
-  return value.replace(/\0/g, '').normalize('NFC');
+  const cleaned = value
+    .normalize('NFC')
+    .replace(multiline ? CONTROL_CHARS_KEEP_WS : CONTROL_CHARS_ALL, '');
+  return cleaned.trim();
 }
 
 export function deepSanitize(value: unknown): unknown {
