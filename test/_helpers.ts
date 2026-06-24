@@ -30,6 +30,7 @@ interface ModelModule {
     REQUIRED_FIELDS: Set<string>;
     SEARCHABLE_FIELDS: Set<string>;
     SORTABLE_FIELDS: Set<string>;
+    UNIQUE_KEY: readonly string[];
     TYPE_NAME: string;
     COLLECTION_FILE: string;
   };
@@ -205,6 +206,14 @@ async function sampleOne(baseUrl: string, spec: FieldSpec): Promise<unknown> {
   throw new Error('unknown spec kind');
 }
 
+// Gives each build a distinct value for a unique-key string field. Without this
+// every payload would carry the same sample value and the second create in any
+// multi-record test would trip duplicate detection. Ref key components are
+// already unique because each is freshly created per build.
+function uniqueValue(type: string, base: string): string {
+  return type === 'URL' ? `${base}/${randomUUID()}` : `${base}-${randomUUID()}`;
+}
+
 // Builds a request body. System and internal fields are never sent — they are
 // not client writable and would be rejected with 400.
 export async function buildPayload(
@@ -214,11 +223,15 @@ export async function buildPayload(
 ): Promise<Record<string, unknown>> {
   const Model = MODELS[entity];
   if (!Model) throw new Error(`unknown entity: ${entity}`);
+  const key = new Set<string>(Model.SCHEMA.UNIQUE_KEY ?? []);
   const payload: Record<string, unknown> = {};
   for (const [name, spec] of Object.entries(Model.SCHEMA.FIELDS)) {
     if (READONLY_FIELDS.has(name)) continue;
     if (!partial && !Model.SCHEMA.REQUIRED_FIELDS.has(name)) continue;
     payload[name] = await sampleValue(baseUrl, spec);
+    if (key.has(name) && spec.kind === 'scalar' && typeof payload[name] === 'string') {
+      payload[name] = uniqueValue(spec.type, payload[name] as string);
+    }
   }
   return payload;
 }

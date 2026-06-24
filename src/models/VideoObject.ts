@@ -61,6 +61,10 @@ const SYSTEM_FIELDS: Set<string> = new Set(['id', 'dateCreated', 'dateModified',
 
 const REF_COLLECTIONS: Record<string, string> = {"Person":"persons.json","ImageObject":"image-objects.json","Organization":"organizations.json"};
 
+// Properties whose combined value must be unique across the collection. Empty
+// when the entity allows duplicates.
+const UNIQUE_KEY: readonly string[] = ["contentUrl"];
+
 function isEmpty(value: unknown): boolean {
   if (value === undefined || value === null) return true;
   if (typeof value === 'string' && value === '') return true;
@@ -272,10 +276,33 @@ export async function embedRefs(item: VideoObject): Promise<Record<string, unkno
   return out;
 }
 
+// A candidate collides when some other record shares every unique-key value.
+// Comparison runs on already-sanitized, ref-normalized data, so equal values
+// are in canonical form. Entities without a key never collide.
+function violatesUniqueKey(
+  items: readonly VideoObject[],
+  candidate: Record<string, unknown>,
+  excludeId: string | null,
+): boolean {
+  if (UNIQUE_KEY.length === 0) return false;
+  return items.some((item) =>
+    item.id !== excludeId
+    && UNIQUE_KEY.every((field) => (item as unknown as Record<string, unknown>)[field] === candidate[field]));
+}
+
+function duplicateError(): Error {
+  const message = `A ${TYPE_NAME} with this ${UNIQUE_KEY.join(' and ')} already exists.`;
+  const error = new Error(message) as Error & { details: string[] };
+  error.name = 'DuplicateError';
+  error.details = [message];
+  return error;
+}
+
 export function create(rawData: unknown): Promise<VideoObject> {
   return withLock(async () => {
     const data = normalizeRefs(rawData as Record<string, unknown>);
     const items = await readCollection<VideoObject>(COLLECTION_FILE);
+    if (violatesUniqueKey(items, data, null)) throw duplicateError();
     const now = new Date().toISOString();
     const item = {
       ...data,
@@ -309,6 +336,7 @@ export function update(id: string, rawData: unknown): Promise<VideoObject | null
       dateCreated: current.dateCreated,
       dateModified: new Date().toISOString(),
     } as unknown as VideoObject;
+    if (violatesUniqueKey(items, updated as unknown as Record<string, unknown>, current.id)) throw duplicateError();
     items[index] = updated;
     await writeCollection(COLLECTION_FILE, items);
     return updated;
@@ -330,4 +358,4 @@ export function etagOf(item: VideoObject): string {
   return etagFor(item);
 }
 
-export const SCHEMA = { FIELDS, REQUIRED_FIELDS, SEARCHABLE_FIELDS, SORTABLE_FIELDS, TYPE_NAME, COLLECTION_FILE };
+export const SCHEMA = { FIELDS, REQUIRED_FIELDS, SEARCHABLE_FIELDS, SORTABLE_FIELDS, UNIQUE_KEY, TYPE_NAME, COLLECTION_FILE };
