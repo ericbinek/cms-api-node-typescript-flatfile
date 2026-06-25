@@ -42,6 +42,10 @@ export function methodNotAllowedError(allowed: string[], path: string): ErrorRes
   return createError(405, 'METHOD_NOT_ALLOWED', `Method not allowed. Allowed: ${allowed.join(', ')}.`, [], path);
 }
 
+export function tooManyRequestsError(path: string): ErrorResponse {
+  return createError(429, 'TOO_MANY_REQUESTS', 'Rate limit exceeded. Try again later.', [], path);
+}
+
 export function preconditionRequiredError(path: string): ErrorResponse {
   return createError(428, 'PRECONDITION_REQUIRED', 'If-Match header required for this operation.', [], path);
 }

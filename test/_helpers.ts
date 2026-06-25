@@ -145,9 +145,19 @@ export async function startServer({ accounts, env }: StartOptions = {}): Promise
     await writeFile(join(dataDir, 'accounts.json'), JSON.stringify(seed.map(accountRecord), null, 2));
   }
 
+  // Default the rate limits high so the conformance suite never trips them — all
+  // requests share one process and one loopback IP. The rate-limit suite sets
+  // small values through `env` to exercise the limiter deliberately.
   const child = spawn(process.execPath, ['src/server.ts'], {
     cwd: REPO_ROOT,
-    env: { ...process.env, PORT: String(port), DATA_DIR: dataDir, ...(env || {}) },
+    env: {
+      ...process.env,
+      PORT: String(port),
+      DATA_DIR: dataDir,
+      RATE_LIMIT_READ_PER_MINUTE: '1000000',
+      RATE_LIMIT_WRITE_PER_MINUTE: '1000000',
+      ...(env || {}),
+    },
     stdio: ['ignore', 'pipe', 'pipe'],
   });
   child.stderr?.on('data', () => {});

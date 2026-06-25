@@ -7,9 +7,11 @@ import {
   payloadTooLargeError,
   unsupportedMediaTypeError,
   unauthorizedError,
+  tooManyRequestsError,
   validationError,
   internalError,
 } from './errors.ts';
+import { rateLimit } from './lib/rate-limit.ts';
 import { resolvePrincipal, requiresSession, UnauthorizedError } from './lib/auth.ts';
 import { seedAdmin } from './models/account.ts';
 import { handleAuthRoutes } from './routers/auth.router.ts';
@@ -44,6 +46,15 @@ async function handleRequest(req: IncomingMessage, res: ServerResponse): Promise
   });
 
   try {
+    // Rate limit before anything else, so every request counts against the
+    // per-IP window. The peer address is the only trusted source — a forwarded
+    // header would be client-spoofable and these targets run without a proxy.
+    const retryAfter = rateLimit(req.socket.remoteAddress ?? '', method);
+    if (retryAfter !== null) {
+      res.setHeader('Retry-After', String(retryAfter));
+      return jsonError(req, res, tooManyRequestsError(requestPath));
+    }
+
     if (method === 'OPTIONS') {
       res.writeHead(204, CORS_HEADERS);
       res.end();
